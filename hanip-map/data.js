@@ -9,5 +9,5 @@ const catalog = {
  shops:[
  {food:'salt',name:'본노엘 중계은행사거리점',review:{url:'https://m.place.naver.com/restaurant/1697696609/review/visitor',checked:'2026-11-23',visit:'2026-11-23',stars:4.5,summary:'빵 종류가 늘었고 맛있는 빵이 많아 지인에게 추천한다는 후기예요.'},coords:[37.649648,127.076474],menu:'고짠고짠 소금빵',checked:'2026-11-23',source:'https://bizw.kr/brand/197618',map:'https://m.place.naver.com/restaurant/1697696609/location'},
  {food:'salt',name:'밀스',review:{url:'https://m.place.naver.com/restaurant/1249383114/review/visitor',checked:'2026-11-23',visit:'2026-10-24',stars:5,summary:'모카소금빵과 휘낭시에, 초코바게트를 추천하고 빵 종류가 다양해졌다고 했어요.'},coords:[37.6630617,127.0734109],menu:'소금빵',checked:'2026-11-23',source:'https://m.place.naver.com/restaurant/1249383114/menu/list',map:'https://m.place.naver.com/restaurant/1249383114/location'},
- {food:'pizza',name:'골목 디저트 공방',menu:'치즈 피자설기',demo:true}]
+ {food:'pizza',name:'중앙떡집',menu:'피자설기',coords:[37.650035,127.061257],sourceLabel:'방문자 구매 후기 ↗',source:'https://m.place.naver.com/place/1491847415/review/visitor',map:'https://m.place.naver.com/place/1491847415/location',review:{placeStars:4.81,url:'https://m.place.naver.com/place/1491847415/review/visitor',checked:'2026-11-23',visit:'2026-11-17',summary:'피자설기의 속이 실하고 떡이 쫀득했다는 구매 후기예요.'}}]
 };

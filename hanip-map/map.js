@@ -25,13 +25,13 @@ const pins=L.layerGroup().addTo(atlas), byShop=new Map();
 function showShops(shops){
  pins.clearLayers();byShop.clear();
  for(const shop of shops.filter(s=>s.coords&&!s.demo)){
-   const label=document.createElement('strong');label.textContent=shop.name;
+   const label=document.createElement('strong');label.textContent=shop.name+' · '+(catalog.foods.find(food=>food.id===shop.food)?.name || shop.menu);
    const pin=L.marker(shop.coords,{icon:icon('●'),title:shop.name}).addTo(pins).bindTooltip(label,{permanent:true,direction:'top',offset:[0,-13]});
    const box=element('div','','review-popup');
    box.append(element('strong',shop.name),element('div',shop.menu));
    const review=shop.review;
    if(review){
-     box.append(element('b','방문자 한 명의 별점  ★ '+review.stars+' / 5'),
+     box.append(element('b',review.placeStars ? '네이버 장소 별점  ★ '+review.placeStars+' / 5' : '방문자 한 명의 별점  ★ '+review.stars+' / 5'),
        element('p',review.summary),element('small',review.visit+' 방문 · 후기 요약'),
        link('네이버 방문자 후기 전체 보기 ↗',review.url),
        element('small','자료 확인 '+review.checked));
@@ -43,7 +43,11 @@ function showShops(shops){
  }
 }
 function focusShop(shop){request++;atlas.setView(shop.coords,17);byShop.get(shop)?.openPopup();document.querySelector('.mapbox').scrollIntoView({block:'start'})}
-function locate(){
+function fitShops(extra=[]){
+ const points=catalog.shops.filter(s=>!s.demo && s.coords && catalog.foods.some(f=>f.id===s.food)).map(s=>s.coords);
+ atlas.fitBounds([schoolCenter,...points,...extra],{paddingTopLeft:[65,85],paddingBottomRight:[65,45],maxZoom:16,animate:false});
+}
+function locate(initial=false){
  const ticket=++request;
  if(!navigator.geolocation){statusNode.textContent='현재 위치를 사용할 수 없어 학교 주변을 표시해요.';return}
  statusNode.textContent='현재 위치 확인 중…';
@@ -51,10 +55,11 @@ function locate(){
    const point=[coords.latitude,coords.longitude];
    if(positionMarker)positionMarker.setLatLng(point);
    else positionMarker=L.circleMarker(point,{radius:8,color:'white',weight:3,fillColor:'#1675ed',fillOpacity:1}).addTo(atlas).bindTooltip('내 위치');
-   if(request===ticket){atlas.setView(point,16);statusNode.textContent='현재 위치를 표시했어요.'}
+   if(request===ticket){if(initial)fitShops([point]);else atlas.setView(point,16);statusNode.textContent='현재 위치를 표시했어요.'}
    else if(statusNode.textContent==='현재 위치 확인 중…')statusNode.textContent='';
  },()=>{if(request===ticket)statusNode.textContent='위치를 확인할 수 없어요. 학교 주변에서 탐색할 수 있어요.'},{timeout:9000,maximumAge:60000});
 }
 document.querySelector('#school').onclick=()=>{request++;atlas.setView(schoolCenter,15);statusNode.textContent='학교 주변'};
-document.querySelector('#locate').onclick=locate;
-locate();
+document.querySelector('#locate').onclick=()=>locate();
+fitShops();
+locate(true);
