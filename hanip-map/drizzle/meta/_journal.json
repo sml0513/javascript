@@ -2,6 +2,19 @@
   "version": "7",
   "dialect": "sqlite",
   "entries": [
-    {"idx": 0, "version": "6", "when": 1795428000000, "tag": "0000_catalog_sync", "breakpoints": true}
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1795428000000,
+      "tag": "0000_catalog_sync",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1795428060000,
+      "tag": "0001_national_shops",
+      "breakpoints": true
+    }
   ]
 }

@@ -23,14 +23,17 @@ function icon(label,extra=''){
 L.marker(schoolCenter,{icon:icon('校','campus'),title:'미래산업과학고등학교'}).addTo(atlas).bindTooltip('미래산업과학고등학교');
 const pins=L.layerGroup().addTo(atlas), byShop=new Map();
 let mapShops=[];
+let drawnBounds=null;
 function showShops(shops){
  mapShops=shops.filter(s=>s.coords&&!s.demo);
  drawShops();
 }
 function drawShops(){
  pins.clearLayers();byShop.clear();
+ drawnBounds=atlas.getZoom()>=12 ? atlas.getBounds().pad(0.45) : null;
  const groups=new Map();
  for(const shop of mapShops){
+   if(drawnBounds && !drawnBounds.contains(shop.coords))continue;
    const pt=atlas.project(shop.coords);
    const key=atlas.getZoom()<15 ? Math.floor(pt.x/48)+','+Math.floor(pt.y/48) : shop.coords.join(',');
    if(!groups.has(key))groups.set(key,[]);
@@ -73,22 +76,22 @@ function drawShops(){
  }
 }
 atlas.on('zoomend',drawShops);
-function focusShop(shop){request++;atlas.setView(shop.coords,17,{animate:false});byShop.get(shop)?.openPopup();document.querySelector('.mapbox').scrollIntoView({block:'start'})}
-function fitShops(extra=[]){
- const points=catalog.shops.filter(s=>!s.demo && s.coords && catalog.foods.some(f=>f.id===s.food)).map(s=>s.coords);
- atlas.fitBounds([schoolCenter,...points,...extra],{paddingTopLeft:[65,85],paddingBottomRight:[65,45],maxZoom:16,animate:false});
+atlas.on('moveend',()=>{if(drawnBounds && !drawnBounds.contains(atlas.getBounds()))drawShops();});
+function focusShop(shop){request++;atlas.setView(shop.coords,17,{animate:false});if(!byShop.has(shop))drawShops();byShop.get(shop)?.openPopup();document.querySelector('.mapbox').scrollIntoView({block:'start'})}
+function fitShops(){
+ atlas.fitBounds([[33.08,124.62],[38.66,132.02]],{paddingTopLeft:[35,52],paddingBottomRight:[35,25],animate:false});
 }
 function locate(initial=false){
  const ticket=++request;
- if(!navigator.geolocation){statusNode.textContent='현재 위치를 사용할 수 없어 서울 판매처를 표시해요.';return}
+ if(!navigator.geolocation){statusNode.textContent='현재 위치를 사용할 수 없어 전국 판매처를 표시해요.';return}
  statusNode.textContent='현재 위치 확인 중…';
  navigator.geolocation.getCurrentPosition(({coords})=>{
    const point=[coords.latitude,coords.longitude];
    if(positionMarker)positionMarker.setLatLng(point);
    else positionMarker=L.circleMarker(point,{radius:8,color:'white',weight:3,fillColor:'#1675ed',fillOpacity:1}).addTo(atlas).bindTooltip('내 위치');
-   if(request===ticket){if(initial)fitShops([point]);else atlas.setView(point,16);statusNode.textContent='현재 위치를 표시했어요.'}
+   if(request===ticket){if(!initial)atlas.setView(point,16);statusNode.textContent='현재 위치를 표시했어요.'}
    else if(statusNode.textContent==='현재 위치 확인 중…')statusNode.textContent='';
- },()=>{if(request===ticket)statusNode.textContent='위치를 확인할 수 없어요. 서울 판매처를 탐색할 수 있어요.'},{timeout:9000,maximumAge:60000});
+ },()=>{if(request===ticket)statusNode.textContent='위치를 확인할 수 없어요. 전국 판매처를 탐색할 수 있어요.'},{timeout:9000,maximumAge:60000});
 }
 document.querySelector('#school').onclick=()=>{request++;atlas.setView(schoolCenter,15);statusNode.textContent='학교 주변'};
 document.querySelector('#locate').onclick=()=>locate();

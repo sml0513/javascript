@@ -1,4 +1,4 @@
-const discoveryVersion=2;
+const discoveryVersion=3;
 const contentTypes = {
   html:'text/html',js:'text/javascript',css:'text/css',svg:'image/svg+xml',txt:'text/plain'
 };
@@ -8,15 +8,22 @@ function json(body, status=200) {
 }
 
 async function snapshot(db) {
-  const row = await db.prepare('SELECT catalog, progress FROM catalog_sync WHERE id=1').first();
-  if(!row)return {catalog:seed,progress:null,corrected:false};
+  const [state, additions]=await db.batch([
+    db.prepare('SELECT catalog, progress FROM catalog_sync WHERE id=1'),
+    db.prepare('SELECT entry FROM catalog_shops ORDER BY id')
+  ]);
+  const row=state.results[0];
+  if(!row)return {catalog:seed,progress:null,legacyShops:seed.shops};
   const catalog=JSON.parse(row.catalog);
   const progress=JSON.parse(row.progress);
-  const invalid=catalog.shops.filter(shop=>!matchesReleaseBranch(shop.food,shop.name,shop.district));
-  catalog.shops=catalog.shops.filter(shop=>!invalid.includes(shop));
-  const invalidToday=invalid.filter(shop=>shop.observed===progress.day).length;
-  progress.shopsAdded=Math.max(0,progress.shopsAdded-invalidToday);
-  return {catalog,progress,corrected:invalid.length>0};
+  const legacyShops=catalog.shops.filter(shop=>matchesReleaseBranch(shop.food,shop.name,shop.district,shopRegion(shop)));
+  catalog.shops=legacyShops.slice();
+  for(const shop of seed.shops.filter(shop=>shopRegion(shop)!=='서울특별시'))addShop(catalog,shop);
+  for(const row of additions.results){
+    const shop=JSON.parse(row.entry);
+    if(matchesReleaseBranch(shop.food,shop.name,shop.district,shopRegion(shop)))catalog.shops.push(shop);
+  }
+  return {catalog,progress,legacyShops};
 }
 
 function publicStatus(progress) {
@@ -42,19 +49,17 @@ async function refresh(db) {
     .bind(lease,started+55_000,started).run();
   if(!claimed.meta.changes)return {state:'busy'};
   try {
-    const {catalog,progress:previous,corrected}=await snapshot(db);
+    const {catalog,progress:previous,legacyShops}=await snapshot(db);
     const progress=previous.day===today && previous.version===discoveryVersion ? previous : fresh;
-    if(progress.state==='done' || progress.state==='partial'){
-      if(corrected)await db.prepare('UPDATE catalog_sync SET catalog=?,progress=? WHERE id=1 AND lease=?')
-        .bind(JSON.stringify(catalog),JSON.stringify(progress),lease).run();
-      return publicStatus(progress);
-    }
+    if(progress.state==='done' || progress.state==='partial')return publicStatus(progress);
+    const startCount=catalog.shops.length;
     progress.state='running';
     try {
-      if(!progress.rankingDate)await startDay(catalog,progress,today);
-      let remainingBudget=22;
+      const initializing=!progress.rankingDate;
+      if(initializing)await startDay(catalog,progress,today);
+      let remainingBudget=initializing ? 22 : 36;
       while(progress.queue.length && remainingBudget>0 && Date.now()-started<14_000){
-        const tasks=progress.queue.splice(0,Math.min(3,remainingBudget));
+        const tasks=progress.queue.splice(0,Math.min(5,remainingBudget));
         remainingBudget-=tasks.length;
         const outcomes=await Promise.allSettled(tasks.map(task=>processTask(task,catalog,progress,today)));
         outcomes.forEach((outcome,index)=>{
@@ -73,9 +78,15 @@ async function refresh(db) {
       console.warn('Hanip source:',String(error));
       progress.state='source-unavailable';
     }
-    const saved=await db.prepare('UPDATE catalog_sync SET catalog=?,progress=? WHERE id=1 AND lease=?')
-      .bind(JSON.stringify(catalog),JSON.stringify(progress),lease).run();
-    return saved.meta.changes ? publicStatus(progress) : {state:'busy'};
+    const inserts=catalog.shops.slice(startCount).map(shop=>db.prepare(
+      'INSERT OR IGNORE INTO catalog_shops (food,source,entry) SELECT ?,?,? WHERE EXISTS (SELECT 1 FROM catalog_sync WHERE id=1 AND lease=?)'
+    ).bind(shop.food,shop.source,JSON.stringify(shop),lease));
+    const results=await db.batch([
+      ...inserts,
+      db.prepare('UPDATE catalog_sync SET catalog=?,progress=? WHERE id=1 AND lease=?')
+        .bind(JSON.stringify({...catalog,shops:legacyShops}),JSON.stringify(progress),lease)
+    ]);
+    return results.at(-1).meta.changes ? publicStatus(progress) : {state:'busy'};
   } finally {
     await db.prepare('UPDATE catalog_sync SET lease=NULL,lease_until=0 WHERE id=1 AND lease=?').bind(lease).run();
   }

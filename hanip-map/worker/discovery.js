@@ -1,5 +1,4 @@
 const sourceRoot = 'https://nowdongne.com';
-const districts = new Set('강남 강동 강북 강서 관악 광진 구로 금천 노원 도봉 동대문 동작 마포 서대문 서초 성동 성북 송파 양천 영등포 용산 은평 종로 중 중랑'.split(' ').map(name => name + '구'));
 const keyOf = value => value.normalize('NFKC').replace(/[\s·()]/g,'').toLowerCase();
 
 function plain(html) {
@@ -19,8 +18,9 @@ function links(html) {
   }));
 }
 
-async function getText(url) {
+async function getText(url, {allowMissing=false}={}) {
   const response = await fetch(url, {signal: AbortSignal.timeout(6500), headers:{'User-Agent':'HanipMap/1.0 (daily public food catalog)'}});
+  if (allowMissing && response.status===404) return null;
   if (!response.ok) throw Error('출처 응답 ' + response.status);
   const text = await response.text();
   if (text.length > 2_000_000) throw Error('출처 페이지 크기 초과');
@@ -102,9 +102,9 @@ const limitedReleases = {
   'auto-49650810': {name:'고디바 롯데월드몰점', district:'송파구'}
 };
 
-function matchesReleaseBranch(food, name, district) {
+function matchesReleaseBranch(food, name, district, region='서울특별시') {
   const branch=limitedReleases[food];
-  return !branch || (keyOf(name)===keyOf(branch.name) && district===branch.district);
+  return !branch || (keyOf(name)===keyOf(branch.name) && district===branch.district && region==='서울특별시');
 }
 
 function readShop(html, task, today) {
@@ -115,18 +115,19 @@ function readShop(html, task, today) {
   if (!business) return null;
   const {name, address, geo} = business;
   if (typeof name !== 'string' || !name.trim() || name.length > 120) return null;
-  if (!/^서울(?:특별시|시)?(?:\s|$)/.test(address.addressRegion || '') ||
-      address.addressLocality !== task.district) return null;
-  if(!matchesReleaseBranch(task.food,name,task.district))return null;
+  const region = regionOf(address.addressRegion) || regionOf(address.streetAddress);
+  const district = typeof address.addressLocality==='string' ? address.addressLocality.trim() : '';
+  if (!region || !district || (task.region && region !== task.region)) return null;
+  if (!matchesReleaseBranch(task.food,name,district,region)) return null;
   const coords = [Number(geo.latitude), Number(geo.longitude)];
-  if (!(coords[0]>=37.42 && coords[0]<=37.71 && coords[1]>=126.76 && coords[1]<=127.19)) return null;
+  if (!(coords[0]>=32.9 && coords[0]<=38.7 && coords[1]>=124.2 && coords[1]<=132)) return null;
   const proof = plain(html.match(/class="k">\s*판매 확인\s*<\/span>\s*<span class="v">([\s\S]*?)<\/span>/i)?.[1] || '');
   const dated = proof.match(/(네이버\s*플레이스\s*메뉴|(?:네이버\s*)?방문자\s*리뷰|(?:네이버\s*)?블로그\s*리뷰)\s*·\s*(\d{4}-\d{2}-\d{2})/);
   if (!dated || dated[2]>today) return null;
   const description = plain(html.match(/class="k">\s*파는 디저트\s*<\/span>\s*<span class="v">([\s\S]*?)<\/span>/i)?.[1] || '');
   if (!description.split('·').some(name => keyOf(name.trim())===keyOf(task.name))) return null;
   return {
-    food:task.food, name:name.trim(), district:task.district, address:address.streetAddress, coords,
+    food:task.food, name:name.trim(), region, district, address:address.streetAddress, coords,
     menu: task.name, observed: today, evidenceDate:dated[2],
     sourceLabel: dated[1] + ' 확인 기록', source:sourceRoot+task.path,
     map:'https://map.kakao.com/link/map/'+encodeURIComponent(name)+','+coords.join(',')
@@ -136,7 +137,7 @@ function readShop(html, task, today) {
 function addShop(catalog, shop) {
   const existing = catalog.shops.some(s => s.food===shop.food && (
     s.source===shop.source || s.map===shop.map ||
-    (s.district===shop.district && keyOf(s.name)===keyOf(shop.name) &&
+    (shopRegion(s)===shopRegion(shop) && s.coords && keyOf(s.name)===keyOf(shop.name) &&
       Math.hypot(s.coords[0]-shop.coords[0],s.coords[1]-shop.coords[1])<0.002)
   ));
   if (existing) return false;
@@ -144,12 +145,47 @@ function addShop(catalog, shop) {
   return true;
 }
 
-function seoulDistricts(html, item) {
-  return links(html).flatMap(({href}) => {
-    const parts = decodeURI(href).split('/');
-    if (parts.length!==5 || parts[2]!==item.path.split('/')[2] || parts[3]!=='서울특별시' || !districts.has(parts[4])) return [];
-    return [{...item,kind:'district',path:href,food:item.id,district:parts[4],rankPath:item.path}];
-  });
+function districtRoutes(html, item) {
+  const paths = new Map();
+  for (const {href} of links(html)) {
+    if (!href.startsWith(item.path+'/')) continue;
+    let segments;
+    try { segments=decodeURIComponent(href).split('/'); } catch { continue; }
+    const region=regionOf(segments[3]);
+    const district=segments[4];
+    if (segments.length!==5 || !region || !/^[가-힣0-9 ]{1,30}$/.test(district)) continue;
+    paths.set(region+'|'+district,{...item,kind:'district',path:href,food:item.id,region,district,rankPath:item.path});
+  }
+  // The national page lists its busiest districts. Check a regional entry point
+  // where the list omitted a region for the widely available salt bread.
+  if(item.id==='salt'){
+    const listedRegions=new Set([...paths.values()].map(task=>task.region));
+    for(const [region,district] of nationalRegions){
+      if(listedRegions.has(region) || region==='세종특별자치시')continue;
+      const path=item.path+'/'+encodeURIComponent(region)+'/'+encodeURIComponent(district);
+      paths.set(region+'|'+district,{...item,kind:'district',path,food:item.id,region,district,rankPath:item.path,allowMissing:true});
+    }
+  }
+  const queuedByRegion=new Map();
+  for(const task of paths.values()){
+    if(!queuedByRegion.has(task.region))queuedByRegion.set(task.region,[]);
+    queuedByRegion.get(task.region).push(task);
+  }
+  const tasks=[];
+  while([...queuedByRegion.values()].some(group=>group.length)){
+    for(const group of queuedByRegion.values())if(group.length)tasks.push(group.shift());
+  }
+  return tasks;
+}
+
+function enqueueShopPages(html, task, catalog, progress) {
+  const knownSources=new Set(catalog.shops.filter(shop=>shop.food===task.food).map(shop=>shop.source));
+  for (const path of new Set(snackPaths(html))) {
+    const key=task.food+':'+path;
+    if(progress.seen.includes(key) || knownSources.has(sourceRoot+path))continue;
+    progress.seen.push(key);
+    progress.queue.push({...task,kind:'shop',path,allowMissing:false});
+  }
 }
 
 async function startDay(catalog, progress, today) {
@@ -172,23 +208,15 @@ async function startDay(catalog, progress, today) {
 }
 
 async function processTask(task, catalog, progress, today) {
-  const html = await getText(sourceRoot + task.path);
+  const html = await getText(sourceRoot + task.path,task);
+  if (!html) return;
   if (task.kind==='food') {
-    const routes = seoulDistricts(html,task);
-    if (routes.length) progress.queue.unshift(...routes);
+    progress.queue.push(...districtRoutes(html,task));
+    enqueueShopPages(html,{...task,food:task.id,rankPath:task.path},catalog,progress);
     return;
   }
   if (task.kind==='district') {
-    const paths = [...new Set(snackPaths(html))];
-    for (const path of paths.reverse()) {
-      const key = task.food+':'+path;
-      if (!progress.seen.includes(key)) {
-        progress.seen.push(key);
-        if (!catalog.shops.some(shop=>shop.food===task.food && shop.source===sourceRoot+path)) {
-          progress.queue.unshift({...task,kind:'shop',path});
-        }
-      }
-    }
+    enqueueShopPages(html,task,catalog,progress);
     return;
   }
   const shop = readShop(html,task,today);

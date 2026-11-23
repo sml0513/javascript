@@ -4592,6 +4592,38 @@ const catalog = {
       "observed": "2026-11-23",
       "sourceLabel": "수집된 지점 메뉴 ↗",
       "map": "https://map.kakao.com/link/map/%ED%95%9C%EC%A0%95%EC%84%A0%20%EB%8D%94%ED%98%84%EB%8C%80%EC%84%9C%EC%9A%B8%EC%A0%90,37.5262089,126.928534"
+    },
+    {
+      "food": "salt",
+      "name": "밀팡베이커리",
+      "district": "세종시",
+      "region": "세종특별자치시",
+      "address": "세종특별자치시 한누리대로 2143",
+      "coords": [
+        36.4781743,
+        127.2885033
+      ],
+      "menu": "찹쌀모찌소금빵",
+      "observed": "2026-11-23",
+      "sourceLabel": "수집된 지점 메뉴",
+      "source": "https://dessertnow.j-curve.co.kr/세종/세종시/밀팡베이커리/",
+      "map": "https://map.kakao.com/link/map/%EB%B0%80%ED%8C%A1%EB%B2%A0%EC%9D%B4%EC%BB%A4%EB%A6%AC,36.4781743,127.2885033"
+    },
+    {
+      "food": "salt",
+      "name": "싶빵공장 세종보람점",
+      "district": "세종시",
+      "region": "세종특별자치시",
+      "address": "세종특별자치시 보람동 738",
+      "coords": [
+        36.4775167,
+        127.2872488
+      ],
+      "menu": "소금빵",
+      "observed": "2026-11-23",
+      "sourceLabel": "수집된 지점 메뉴",
+      "source": "https://dessertnow.j-curve.co.kr/세종/세종시/싶빵공장-세종보람점/",
+      "map": "https://map.kakao.com/link/map/%EC%8B%B6%EB%B9%B5%EA%B3%B5%EC%9E%A5%20%EC%84%B8%EC%A2%85%EB%B3%B4%EB%9E%8C%EC%A0%90,36.4775167,127.2872488"
     }
   ],
   "searchLog": {
