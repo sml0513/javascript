@@ -1,3 +1,4 @@
+const discoveryVersion=2;
 const contentTypes = {
   html:'text/html',js:'text/javascript',css:'text/css',svg:'image/svg+xml',txt:'text/plain'
 };
@@ -23,7 +24,7 @@ function publicStatus(progress) {
 async function refresh(db) {
   const today=dateInSeoul();
   const fresh={
-    day:today, state:'running', foodsAdded:0, shopsAdded:0, checked:0,
+    version:discoveryVersion, day:today, state:'running', foodsAdded:0, shopsAdded:0, checked:0,
     errors:0, queue:[], seen:[], rankingDate:null, completedAt:null
   };
   await db.prepare('INSERT OR IGNORE INTO catalog_sync (id,catalog,progress) VALUES (1,?,?)')
@@ -35,7 +36,7 @@ async function refresh(db) {
   if(!claimed.meta.changes)return {state:'busy'};
   try {
     const {catalog,progress:previous}=await snapshot(db);
-    const progress=previous.day===today ? previous : fresh;
+    const progress=previous.day===today && previous.version===discoveryVersion ? previous : fresh;
     if(progress.state==='done' || progress.state==='partial')return publicStatus(progress);
     progress.state='running';
     try {

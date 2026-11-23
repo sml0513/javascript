@@ -44,6 +44,33 @@ function rankItems(html) {
   return ranked;
 }
 
+const reelsRoot = 'https://www.hypenow.io';
+
+function withinDays(date, today, days) {
+  const age=(Date.parse(today)-Date.parse(date))/86400000;
+  return age>=0 && age<=days;
+}
+
+async function reelsReports(today) {
+  const html=await getText(reelsRoot+'/contents');
+  const paths=[...new Set(links(html).map(link=>link.href))]
+    .filter(path=>/^\/contents\/\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}\/analysis-report$/.test(path))
+    .filter(path=>withinDays(path.split('_')[1].split('/')[0],today,28))
+    .sort((a,b)=>b.localeCompare(a)).slice(0,7);
+  const reports=await Promise.allSettled(paths.map(async (path)=>{
+    const report=await getText(reelsRoot+path);
+    const headings=[...report.matchAll(/<h[23]\b[^>]*>([\s\S]*?)<\/h[23]>/gi)]
+      .map(m=>plain(m[1])).filter(title=>/^F\s*&\s*B\s*\d+위/i.test(title));
+    return {url:reelsRoot+path,headings};
+  }));
+  return reports.flatMap(result=>result.status==='fulfilled' ? [result.value] : []);
+}
+
+function fromReels(reports, food) {
+  const report=reports.find(report=>report.headings.some(title=>keyOf(title).includes(keyOf(food.name))));
+  return report ? {label:'하입나우 · 인스타그램 릴스 분석',url:report.url} : null;
+}
+
 async function independentNews(food, today) {
   const url = new URL('https://news.google.com/rss/search');
   url.search = new URLSearchParams({q:'"' + food.name + '" when:28d',hl:'ko',gl:'KR',ceid:'KR:ko'});
@@ -57,8 +84,7 @@ async function independentNews(food, today) {
     if (!href || !publisher || !source || !Number.isFinite(+time)) continue;
     if (/nowdongne|instagram|youtube|facebook|blog\.naver/i.test(source)) continue;
     const date = dateInSeoul(time);
-    const age = (Date.parse(today) - Date.parse(date))/86400000;
-    if (age < 0 || age > 28 || !keyOf(title).includes(keyOf(food.name))) continue;
+    if (!withinDays(date,today,28) || !keyOf(title).includes(keyOf(food.name))) continue;
     if (!/유행|화제|인기|열풍|품절|오픈런|떡픈런|SNS|인스타그램|줄\s*서|급상승|트렌드/i.test(title)) continue;
     return {label:publisher+' · '+date, url:href.replace(/&amp;/g,'&')};
   }
@@ -116,14 +142,17 @@ function seoulDistricts(html, item) {
 }
 
 async function startDay(catalog, progress, today) {
-  const ranked = rankItems(await getText(sourceRoot+'/dessert'));
+  const [ranking,reels]=await Promise.allSettled([getText(sourceRoot+'/dessert'),reelsReports(today)]);
+  if(ranking.status==='rejected')throw ranking.reason;
+  const ranked = rankItems(ranking.value);
+  const reports = reels.status==='fulfilled' ? reels.value : [];
   if ((Date.parse(today)-Date.parse(ranked[0].date))/86400000 > 3) throw Error('최신 순위 자료를 기다리는 중');
   const current = new Map(catalog.foods.map(food => [keyOf(food.name), food]));
   const candidates = ranked.filter(item=>current.has(keyOf(item.name)) || item.rank<=8);
   const results = await Promise.allSettled(candidates.map(async item => {
     const existing = current.get(keyOf(item.name));
     if (existing) return {...item,id:existing.id};
-    const evidence = await independentNews(item,today);
+    const evidence = fromReels(reports,item) || await independentNews(item,today);
     return evidence && {...item,id:item.path.split('/').pop(),evidence};
   }));
   progress.errors += results.filter(r => r.status==='rejected').length;
@@ -158,7 +187,7 @@ async function processTask(task, catalog, progress, today) {
       id:task.food, name:task.name, added:today,
       source:'우리동네 뭐 바뀜? · '+ task.date +' 디저트 순위',
       url:sourceRoot+task.rankPath, more:[task.evidence],
-      reason:task.date+' 공개 디저트 순위 '+task.rank+'위에 올랐고 최근 보도에서도 언급됐어요.'
+      reason:task.date+' 공개 디저트 순위 '+task.rank+'위에 올랐고 '+(task.evidence.label.includes('릴스')?'인스타그램 릴스 분석에도 등장했어요.':'최근 보도에서도 언급됐어요.')
     });
     progress.foodsAdded++;
   }
