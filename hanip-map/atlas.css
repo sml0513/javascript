@@ -2,3 +2,9 @@ body{background:#fafbf7}.bar{width:100%;padding:0 24px;height:58px}.bar>span{fon
 #areaSearch{position:absolute;z-index:500;top:68px;left:50%;transform:translateX(-50%);border:1px solid #658877;border-radius:30px;background:white;color:#20593e;padding:10px 17px;white-space:nowrap;box-shadow:0 2px 9px #243d3424;font-weight:700}
 #allArea{border:0;background:transparent;color:#285b41;text-decoration:underline;padding:8px 0}
 .review-popup{font:14px/1.45 system-ui;max-width:230px}.review-popup strong{font-size:17px}.review-popup b,.review-popup a,.review-popup small{display:block}.review-popup b{margin-top:8px;color:#79510c}.review-popup p{margin:4px 0}.review-popup a{padding:5px 0}.review-popup small{color:#58675d}
+
+.pizza-pin{background:#a95732}.district{display:flex;gap:12px;align-items:center;font-weight:650}.district select{flex:1;padding:9px;border:1px solid #abbca9;border-radius:10px;font:inherit;background:#fff;color:#274933}#coverage{font-size:13px;color:#56665a;margin:8px 0}
+
+.group-pin{background:#153f32;border:2px solid #fff;font:700 14px system-ui;box-shadow:0 0 0 4px #4a815a4a}.district select:focus-visible{outline:3px solid #83a85c}.food:not(:has(img)){padding-right:12px}
+
+#shopQuery,.more-shops{width:100%;padding:10px;border:1px solid #abbca9;border-radius:9px;font:inherit;background:white;margin-top:8px}.more-shops{background:#e9efe1}
