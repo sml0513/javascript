@@ -11,6 +11,7 @@ function link(label, url, cls) {
   return a;
 }
 let selected = catalog.foods[0].id;
+let areaBounds = null;
 function render() {
   const food = catalog.foods.find(item => item.id === selected);
   for (const button of q('#cards').children) {
@@ -19,10 +20,10 @@ function render() {
     button.querySelector('em').textContent = active ? '✓ 선택됨' : '선택하기';
   }
   const result = q('#result');
-  const shops = catalog.shops.filter(shop => shop.food === selected && (!q('#real').checked || !shop.demo));
+  const shops = catalog.shops.filter(shop => shop.food === selected && (!q('#real').checked || !shop.demo) && (!areaBounds || (shop.coords && areaBounds.contains(shop.coords))));
   showShops(shops);
-  result.replaceChildren(element('div', food.name + ' · ' + shops.length + '곳', 'count'));
-  if (!shops.length) result.append(element('p', '판매처를 확인 중이에요', 'empty'));
+  result.replaceChildren(element('div', (areaBounds ? '검색 지역 · ' : '') + food.name + ' · ' + shops.length + '곳', 'count'));
+  if (!shops.length) result.append(element('p', areaBounds ? '이 지역에 등록된 판매처가 없어요.' : '판매처를 확인 중이에요', 'empty'));
   for (const shop of shops) {
     const card = element('article'), info = element('div', '', 'info'), title = element('h3', shop.name);
     const pin = element('div','','pin');
@@ -51,3 +52,16 @@ for(const food of catalog.foods) {
 q('#real').onchange=render;
 q('#review').textContent='유행 자료 확인 · '+catalog.reviewed;
 render();
+
+q('#areaSearch').onclick = () => {
+  areaBounds = atlas.getBounds();
+  q('#allArea').hidden = false;
+  render();
+  statusNode.textContent = q('#result .count').textContent;
+};
+q('#allArea').onclick = () => {
+  areaBounds = null;
+  q('#allArea').hidden = true;
+  statusNode.textContent = '';
+  render();
+};

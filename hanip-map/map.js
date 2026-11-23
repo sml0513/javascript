@@ -27,8 +27,18 @@ function showShops(shops){
  for(const shop of shops.filter(s=>s.coords&&!s.demo)){
    const label=document.createElement('strong');label.textContent=shop.name;
    const pin=L.marker(shop.coords,{icon:icon('●'),title:shop.name}).addTo(pins).bindTooltip(label,{permanent:true,direction:'top',offset:[0,-13]});
-   const box=document.createElement('div');box.textContent=shop.name+' · '+shop.menu;
-   if(shop.map){const a=document.createElement('a');a.href=shop.map;a.target='_blank';a.rel='noopener';a.textContent='지도에서 보기 ↗';box.append(document.createElement('br'),a)}
+   const box=element('div','','review-popup');
+   box.append(element('strong',shop.name),element('div',shop.menu));
+   const review=shop.review;
+   if(review){
+     box.append(element('b','방문자 한 명의 별점  ★ '+review.stars+' / 5'),
+       element('p',review.summary),element('small',review.visit+' 방문 · 후기 요약'),
+       link('네이버 방문자 후기 전체 보기 ↗',review.url),
+       element('small','자료 확인 '+review.checked));
+   }else{
+     box.append(element('p','등록된 후기 정보가 없어요.'));
+   }
+   if(shop.map) box.append(link('지도에서 보기 ↗',shop.map));
    pin.bindPopup(box);byShop.set(shop,pin);
  }
 }
