@@ -48,17 +48,60 @@ function render(limit = 30) {
     result.append(more);
   }
 }
-for(const food of catalog.foods) {
-  const b = element('button','','food'), img = element('img');
-  b.dataset.id = food.id; if(food.image)img.src = food.image; img.alt = '';
-  b.append(element('em'),element('strong',food.name),element('span',food.reason));
-  if(food.image)b.append(img);
-  b.onclick = () => { selected = selected === food.id ? null : food.id; render(); };
-  q('#cards').append(b);
-  const p=element('p',food.name+' · '); p.append(link(food.source,food.url)); for (const source of food.more || []) p.append(' · ',link(source.label,source.url));
-  q('#evidence').append(p);
+function displayCatalog(){
+  q('#cards').replaceChildren();
+  q('#evidence').replaceChildren();
+  for(const food of catalog.foods) {
+    const b = element('button','','food'), img = element('img');
+    b.dataset.id = food.id; if(food.image)img.src = food.image; img.alt = '';
+    b.append(element('em'),element('strong',food.name),element('span',food.reason));
+    if(food.image)b.append(img);
+    b.onclick = () => { selected = selected === food.id ? null : food.id; render(); };
+    q('#cards').append(b);
+    const p=element('p',food.name+' · '); p.append(link(food.source,food.url)); for (const source of food.more || []) p.append(' · ',link(source.label,source.url));
+    q('#evidence').append(p);
+  }
+  showShops(catalog.shops.filter(shop=>catalog.foods.some(food=>food.id===shop.food)));
+  const covered=new Set(catalog.shops.map(shop=>shop.district).filter(Boolean));
+  q('#coverage').textContent='서울 '+covered.size+'/25개 구 · 공개 메뉴와 구매 후기에서 찾은 판매처예요. 당일 재고는 방문 전 확인해 주세요.';
+  const sync=catalog.sync;
+  if(sync?.state==='done' || sync?.state==='partial'){
+    q('#review').textContent=sync.day+' 갱신 · 음식 '+sync.foodsAdded+'개, 판매처 '+sync.shopsAdded+'곳 추가'+(sync.state==='partial'?' · 일부 출처 미확인':'');
+  }else if(sync?.state==='source-unavailable'){
+    q('#review').textContent='출처에 연결하지 못했어요 · 최근 자료 '+catalog.reviewed;
+  }else if(sync?.state==='running'){
+    q('#review').textContent='서울 판매처 확인 중 · '+sync.shopsAdded+'곳 추가';
+  }else{
+    q('#review').textContent='최근 자료 '+catalog.reviewed+(sync?' · 매일 오전 7시 확인':'');
+  }
+  render();
 }
-showShops(catalog.shops.filter(shop=>catalog.foods.some(food=>food.id===shop.food)));
+displayCatalog();
+
+const refreshButton=q('#refreshCatalog');
+refreshButton.hidden=!catalog.sync;
+refreshButton.onclick=async ()=>{
+  refreshButton.disabled=true;
+  try{
+    let state;
+    do{
+      q('#review').textContent='유행 음식과 서울 판매처를 확인하고 있어요…';
+      const response=await fetch('./api/refresh',{method:'POST'});
+      if(!response.ok)throw Error('갱신 요청 실패');
+      state=await response.json();
+      const latest=await fetch('./api/catalog',{cache:'no-store'});
+      if(!latest.ok)throw Error('갱신 자료 요청 실패');
+      Object.assign(catalog,await latest.json());
+      displayCatalog();
+    }while(state.state==='running');
+    if(state.state==='busy')q('#review').textContent='다른 갱신이 진행 중이에요.';
+  }catch{
+    q('#review').textContent='갱신에 실패했어요. 현재 지도 자료를 표시해요.';
+  }finally{
+    refreshButton.disabled=false;
+  }
+};
+
 q('#allPins').onclick=()=>{
  request++;
  selected=null;
@@ -73,8 +116,6 @@ q('#allPins').onclick=()=>{
  statusNode.textContent='전체 판매처를 표시했어요.';
 };
 q('#real').onchange=render;
-q('#review').textContent='유행 자료 확인 · '+catalog.reviewed;
-render();
 
 q('#areaSearch').onclick = () => {
   areaBounds = atlas.getBounds();
@@ -91,8 +132,6 @@ q('#allArea').onclick = () => {
 
 const districts='강남 강동 강북 강서 관악 광진 구로 금천 노원 도봉 동대문 동작 마포 서대문 서초 성동 성북 송파 양천 영등포 용산 은평 종로 중 중랑'.split(' ').map(d=>d+'구');
 for(const district of districts) q('#district').add(new Option(district,district));
-const covered=new Set(catalog.shops.map(s=>s.district).filter(Boolean));
-q('#coverage').textContent='서울 '+covered.size+'/25개 구 · 공개 메뉴와 구매 후기에서 찾은 판매처예요. 당일 재고는 방문 전 확인해 주세요.';
 q('#district').onchange=()=>{
  areaBounds=null;
  q('#allArea').hidden=true;
