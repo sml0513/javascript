@@ -97,6 +97,16 @@ function snackPaths(html) {
   return links(main).filter(({href}) => /^\/snack\/[a-f0-9]{16}$/.test(href)).map(({href}) => href);
 }
 
+// Branded limited-release items need an explicit match to the reported branch.
+const limitedReleases = {
+  'auto-49650810': {name:'고디바 롯데월드몰점', district:'송파구'}
+};
+
+function matchesReleaseBranch(food, name, district) {
+  const branch=limitedReleases[food];
+  return !branch || (keyOf(name)===keyOf(branch.name) && district===branch.district);
+}
+
 function readShop(html, task, today) {
   const records = [...html.matchAll(/<script\b[^>]*type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi)];
   const business = records.map(match => {
@@ -107,6 +117,7 @@ function readShop(html, task, today) {
   if (typeof name !== 'string' || !name.trim() || name.length > 120) return null;
   if (!/^서울(?:특별시|시)?(?:\s|$)/.test(address.addressRegion || '') ||
       address.addressLocality !== task.district) return null;
+  if(!matchesReleaseBranch(task.food,name,task.district))return null;
   const coords = [Number(geo.latitude), Number(geo.longitude)];
   if (!(coords[0]>=37.42 && coords[0]<=37.71 && coords[1]>=126.76 && coords[1]<=127.19)) return null;
   const proof = plain(html.match(/class="k">\s*판매 확인\s*<\/span>\s*<span class="v">([\s\S]*?)<\/span>/i)?.[1] || '');

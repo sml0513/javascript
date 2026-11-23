@@ -9,7 +9,14 @@ function json(body, status=200) {
 
 async function snapshot(db) {
   const row = await db.prepare('SELECT catalog, progress FROM catalog_sync WHERE id=1').first();
-  return row ? {catalog:JSON.parse(row.catalog),progress:JSON.parse(row.progress)} : {catalog:seed,progress:null};
+  if(!row)return {catalog:seed,progress:null,corrected:false};
+  const catalog=JSON.parse(row.catalog);
+  const progress=JSON.parse(row.progress);
+  const invalid=catalog.shops.filter(shop=>!matchesReleaseBranch(shop.food,shop.name,shop.district));
+  catalog.shops=catalog.shops.filter(shop=>!invalid.includes(shop));
+  const invalidToday=invalid.filter(shop=>shop.observed===progress.day).length;
+  progress.shopsAdded=Math.max(0,progress.shopsAdded-invalidToday);
+  return {catalog,progress,corrected:invalid.length>0};
 }
 
 function publicStatus(progress) {
@@ -35,9 +42,13 @@ async function refresh(db) {
     .bind(lease,started+55_000,started).run();
   if(!claimed.meta.changes)return {state:'busy'};
   try {
-    const {catalog,progress:previous}=await snapshot(db);
+    const {catalog,progress:previous,corrected}=await snapshot(db);
     const progress=previous.day===today && previous.version===discoveryVersion ? previous : fresh;
-    if(progress.state==='done' || progress.state==='partial')return publicStatus(progress);
+    if(progress.state==='done' || progress.state==='partial'){
+      if(corrected)await db.prepare('UPDATE catalog_sync SET catalog=?,progress=? WHERE id=1 AND lease=?')
+        .bind(JSON.stringify(catalog),JSON.stringify(progress),lease).run();
+      return publicStatus(progress);
+    }
     progress.state='running';
     try {
       if(!progress.rankingDate)await startDay(catalog,progress,today);
